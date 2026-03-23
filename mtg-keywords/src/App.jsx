@@ -374,8 +374,40 @@ export default function App() {
 
         {/* Footer */}
         <div style={{ maxWidth: 940, margin: "48px auto 0", textAlign: "center" }}>
-          <div style={{ width: 80, height: 1, background: GRV.bg2, margin: "0 auto 14px" }} />
-          <p style={{ margin: 0, fontSize: 11, color: GRV.bg3, fontFamily: "'Share Tech Mono', monospace" }}>Magic: The Gathering is property of Wizards of the Coast · unofficial reference tool</p>
+          <div style={{ width: 120, height: 1, background: GRV.bg2, margin: "0 auto 20px" }} />
+
+          {/* Attributions */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+            <p style={{ margin: 0, fontSize: 11, color: GRV.bg4, fontFamily: "'Share Tech Mono', monospace", lineHeight: 1.8 }}>
+              Card data and images are retrieved live from the{" "}
+              <a href="https://scryfall.com/docs/api" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>
+                Scryfall API
+              </a>
+              {" "}and are used in accordance with Scryfall's{" "}
+              <a href="https://scryfall.com/docs/api" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>
+                non-commercial use policy
+              </a>
+              .
+            </p>
+            <p style={{ margin: 0, fontSize: 11, color: GRV.bg4, fontFamily: "'Share Tech Mono', monospace", lineHeight: 1.8 }}>
+              Magic: The Gathering and all card images are property of{" "}
+              <a href="https://company.wizards.com" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>
+                Wizards of the Coast
+              </a>
+              . This is an unofficial fan reference tool, not affiliated with or endorsed by Wizards of the Coast.
+            </p>
+          </div>
+
+          <div style={{ width: 120, height: 1, background: GRV.bg1, margin: "0 auto 16px" }} />
+
+          {/* Copyright */}
+          <p style={{ margin: 0, fontSize: 11, color: GRV.bg3, fontFamily: "'Share Tech Mono', monospace", lineHeight: 1.8 }}>
+            © {new Date().getFullYear()} Made with ♥ by{" "}
+            <a href="https://leblanc.sh" target="_blank" rel="noopener noreferrer" style={{ color: GRV.yellow_b, textDecoration: "none", borderBottom: `1px solid ${GRV.yellow}` }}>
+              LeBlanc Engineering
+            </a>
+            {" "}in Maine.
+          </p>
         </div>
       </div>
 
