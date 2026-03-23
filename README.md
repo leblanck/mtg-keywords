@@ -1,5 +1,7 @@
 # MTG Keyword Encyclopedia
 
+[![Netlify Status](https://api.netlify.com/api/v1/badges/9129c7ec-53a7-4c04-832e-4cc8752e2753/deploy-status)](https://app.netlify.com/projects/mtg-keyword/deploys)
+
 An app for browsing and searching all Magic: The Gathering keywords.
 
 ## Project structure
