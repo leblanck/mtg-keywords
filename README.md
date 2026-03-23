@@ -1,6 +1,6 @@
 # MTG Keyword Encyclopedia
 
-A gruvbox-themed React app for browsing and searching all Magic: The Gathering keywords.
+An app for browsing and searching all Magic: The Gathering keywords.
 
 ## Project structure
 
