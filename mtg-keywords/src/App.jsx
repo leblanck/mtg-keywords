@@ -39,14 +39,27 @@ function getStyle(cat) {
   return CATEGORY_STYLES[cat] || { bg: GRV.bg, border: GRV.bg3, accentLine: GRV.bg4, badge: GRV.bg3, badgeBg: GRV.bg1, badgeText: GRV.fg2 };
 }
 
-// ─── Scryfall fetch ───────────────────────────────────────────────────────────
+// ─── Scryfall fetch (with sessionStorage cache) ───────────────────────────────
+const CACHE_PREFIX = "mtg_kw_cache__";
+
 async function fetchSampleCards(keyword, count = 4) {
+  const cacheKey = `${CACHE_PREFIX}${keyword}`;
+
+  // Return cached result if available
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) return JSON.parse(cached);
+  } catch (_) {
+    // sessionStorage unavailable — just fetch fresh
+  }
+
   const q   = encodeURIComponent(`keyword:"${keyword}" is:paper`);
   const url = `https://api.scryfall.com/cards/search?q=${q}&order=edhrec&unique=cards&page=1`;
   const res = await fetch(url, { headers: { "User-Agent": "MTGKeywordEncyclopedia/1.0", Accept: "application/json" } });
   if (!res.ok) throw new Error(`scryfall returned ${res.status}`);
   const json = await res.json();
-  return json.data.slice(0, count).map(card => {
+
+  const cards = json.data.slice(0, count).map(card => {
     const uris = card.image_uris ?? card.card_faces?.[0]?.image_uris ?? null;
     return {
       id:       card.id,
@@ -57,6 +70,15 @@ async function fetchSampleCards(keyword, count = 4) {
       type:     card.type_line ?? "",
     };
   }).filter(c => c.image);
+
+  // Persist to sessionStorage for the lifetime of this browser tab
+  try {
+    sessionStorage.setItem(cacheKey, JSON.stringify(cards));
+  } catch (_) {
+    // sessionStorage full or unavailable — silently skip caching
+  }
+
+  return cards;
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -65,6 +87,7 @@ function Modal({ keyword, data, onClose }) {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
   const [selected, setSelected] = useState(null);
+  const [fromCache, setFromCache] = useState(false);
   const style      = getStyle(data.category);
   const isEvergreen = EVERGREEN.has(keyword);
   const isAlpha     = ALPHA_ORIGINS.has(data.first_set);
@@ -76,10 +99,12 @@ function Modal({ keyword, data, onClose }) {
   }, [onClose]);
 
   useEffect(() => {
-    setLoading(true); setError(null); setCards([]); setSelected(null);
+    setLoading(true); setError(null); setCards([]); setSelected(null); setFromCache(false);
+    const cacheKey = `${CACHE_PREFIX}${keyword}`;
+    const isCached = !!sessionStorage.getItem(cacheKey);
     fetchSampleCards(keyword)
-      .then(c  => { setCards(c);           setLoading(false); })
-      .catch(e => { setError(e.message);   setLoading(false); });
+      .then(c  => { setCards(c); setFromCache(isCached); setLoading(false); })
+      .catch(e => { setError(e.message);                 setLoading(false); });
   }, [keyword]);
 
   return (
@@ -197,6 +222,11 @@ function Modal({ keyword, data, onClose }) {
 
               <div style={{ marginTop: 12, fontSize: 10, color: GRV.bg3, fontFamily: "'Share Tech Mono', monospace" }}>
                 card images © wizards of the coast · data sourced from scryfall.com
+                {fromCache && (
+                  <span style={{ marginLeft: 10, color: GRV.aqua_b, fontFamily: "'Share Tech Mono', monospace" }}>
+                    · ✓ cached
+                  </span>
+                )}
               </div>
             </>
           )}
