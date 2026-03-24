@@ -125,7 +125,8 @@ function Modal({ keyword, data, onClose }) {
         position: "fixed", inset: 0, zIndex: 1000,
         background: visible ? "rgba(13,10,8,0.75)" : "rgba(13,10,8,0)",
         transition: "background 0.28s ease",
-        display: "flex", alignItems: "flex-end",     // sheet rises from bottom
+        display: "flex", alignItems: "flex-end",
+          justifyContent: "center",    // center horizontally on wide screens
       }}
     >
       {/* Sheet */}
@@ -134,6 +135,7 @@ function Modal({ keyword, data, onClose }) {
         onClick={e => e.stopPropagation()}
         style={{
           width: "100%",
+          maxWidth: 640,           // caps sheet width on desktop
           maxHeight: "92dvh",
           background: GRV.bg,
           borderRadius: "16px 16px 0 0",
@@ -198,7 +200,7 @@ function Modal({ keyword, data, onClose }) {
 
           {/* Skeletons */}
           {loading && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, maxWidth: 720, margin: "0 auto" }}>
               {[0,1,2,3].map(i => (
                 <div key={i} style={{ aspectRatio: "0.72", borderRadius: 10, background: GRV.bg1, animation: "pulse 1.4s ease infinite", animationDelay: `${i * 0.15}s` }} />
               ))}
@@ -221,10 +223,10 @@ function Modal({ keyword, data, onClose }) {
             </div>
           )}
 
-          {/* Cards — 2-column grid on mobile */}
+          {/* Cards — 2-col on mobile, 4-col capped at 160px on desktop */}
           {!loading && cards.length > 0 && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, maxWidth: 720, margin: "0 auto" }}>
                 {cards.map((card, i) => (
                   <div
                     key={card.id}
