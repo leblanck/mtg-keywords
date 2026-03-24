@@ -398,10 +398,9 @@ function KeywordCard({ name, data, index, onClick }) {
 }
 
 // ─── Install banner ──────────────────────────────────────────────────────────
-function InstallBanner({ onInstall, onDismiss }) {
+// Shared slide-up wrapper used by both banner variants
+function BannerShell({ children, onDismiss }) {
   const [visible, setVisible] = useState(false);
-
-  // Slide in after mount
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
   function dismiss() {
@@ -411,10 +410,9 @@ function InstallBanner({ onInstall, onDismiss }) {
 
   return (
     <div style={{
-      position: "fixed", bottom: "env(safe-area-inset-bottom, 0px)",
-      left: 0, right: 0, zIndex: 200,
+      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200,
       display: "flex", justifyContent: "center",
-      padding: "0 12px 12px",
+      padding: "0 12px calc(12px + env(safe-area-inset-bottom, 0px))",
       pointerEvents: "none",
     }}>
       <div style={{
@@ -422,53 +420,87 @@ function InstallBanner({ onInstall, onDismiss }) {
         background: GRV.bg1,
         border: `1px solid ${GRV.yellow}`,
         borderRadius: 12,
-        padding: "14px 16px",
-        display: "flex", alignItems: "center", gap: 12,
-        boxShadow: `0 4px 24px rgba(0,0,0,0.5)`,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.55)",
         transform: visible ? "translateY(0)" : "translateY(120%)",
         transition: "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
         pointerEvents: "all",
+        overflow: "hidden",
       }}>
-        {/* Icon */}
-        <div style={{ fontSize: 28, flexShrink: 0, lineHeight: 1 }}>🃏</div>
-
-        {/* Text */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, marginBottom: 2 }}>
-            add to home screen
-          </div>
-          <div style={{ fontSize: 11, color: GRV.fg4, fontFamily: SANS, lineHeight: 1.4 }}>
-            install MTG Keywords for quick offline access
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-          <button
-            onClick={onInstall}
-            style={{
-              background: GRV.yellow, border: "none", borderRadius: 6,
-              color: GRV.bg_h, fontFamily: MONO, fontSize: 12, fontWeight: 700,
-              padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            install
-          </button>
-          <button
-            onClick={dismiss}
-            style={{
-              background: "none", border: `1px solid ${GRV.bg3}`, borderRadius: 6,
-              color: GRV.fg4, fontFamily: MONO, fontSize: 11,
-              padding: "5px 14px", cursor: "pointer", whiteSpace: "nowrap",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            not now
-          </button>
-        </div>
+        {children(dismiss)}
       </div>
     </div>
+  );
+}
+
+// Android / Chrome — one-tap install prompt
+function InstallBanner({ onInstall, onDismiss }) {
+  return (
+    <BannerShell onDismiss={onDismiss}>
+      {dismiss => (
+        <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 28, flexShrink: 0, lineHeight: 1 }}>🃏</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, marginBottom: 2 }}>
+              add to home screen
+            </div>
+            <div style={{ fontSize: 11, color: GRV.fg4, fontFamily: SANS, lineHeight: 1.4 }}>
+              install MTG Keywords for quick offline access
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+            <button onClick={onInstall} style={{ background: GRV.yellow, border: "none", borderRadius: 6, color: GRV.bg_h, fontFamily: MONO, fontSize: 12, fontWeight: 700, padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent" }}>
+              install
+            </button>
+            <button onClick={dismiss} style={{ background: "none", border: `1px solid ${GRV.bg3}`, borderRadius: 6, color: GRV.fg4, fontFamily: MONO, fontSize: 11, padding: "5px 14px", cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent" }}>
+              not now
+            </button>
+          </div>
+        </div>
+      )}
+    </BannerShell>
+  );
+}
+
+// iOS Safari — manual instruction banner (no programmatic prompt available)
+function IOSInstallBanner({ onDismiss }) {
+  return (
+    <BannerShell onDismiss={onDismiss}>
+      {dismiss => (
+        <div style={{ padding: "14px 16px" }}>
+          {/* Header row */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 22, lineHeight: 1 }}>🃏</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO }}>
+                add to home screen
+              </div>
+            </div>
+            <button onClick={dismiss} aria-label="Dismiss" style={{ background: "none", border: "none", cursor: "pointer", color: GRV.bg4, fontSize: 18, lineHeight: 1, padding: "4px 6px", WebkitTapHighlightColor: "transparent" }}>
+              ✕
+            </button>
+          </div>
+
+          {/* Step-by-step instructions */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              { icon: "⬆️", text: "tap the share button at the bottom of your browser" },
+              { icon: "➕", text: 'scroll down and tap "Add to Home Screen"' },
+              { icon: "✅", text: 'tap "Add" to confirm' },
+            ].map(({ icon, text }, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ fontSize: 16, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>{icon}</div>
+                <div style={{ fontSize: 12, color: GRV.fg4, fontFamily: SANS, lineHeight: 1.5 }}>{text}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tip */}
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${GRV.bg2}`, fontSize: 10, color: GRV.bg4, fontFamily: MONO, lineHeight: 1.5 }}>
+            once installed, MTG Keywords works offline and opens without the browser chrome
+          </div>
+        </div>
+      )}
+    </BannerShell>
   );
 }
 
@@ -566,24 +598,38 @@ export default function App() {
     });
   }, []);
 
-  // Capture the browser's beforeinstallprompt event and show our custom banner
+  // Detect iOS Safari — it never fires beforeinstallprompt
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) &&
+                !window.MSStream;
+  const isInStandaloneMode = window.matchMedia("(display-mode: standalone)").matches ||
+                             window.navigator.standalone === true;
+
+  // Capture the browser's beforeinstallprompt (Android/Chrome) or show iOS hint
   useEffect(() => {
-    // Don't show if already installed (standalone mode)
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    // Already running as an installed PWA — nothing to show
+    if (isInStandaloneMode) {
       setInstalled(true);
       return;
     }
 
+    // iOS Safari: show manual-instruction banner after a short delay
+    if (isIOS) {
+      // Only show once per session — check sessionStorage flag
+      if (!sessionStorage.getItem("ios_install_dismissed")) {
+        setTimeout(() => setShowBanner(true), 3000);
+      }
+      return;
+    }
+
+    // Android / Chrome / Edge: capture the native install event
     const handler = e => {
-      e.preventDefault();          // suppress the mini browser prompt
-      setInstallEvent(e);          // stash it so we can trigger it later
-      // Show our banner after a 3-second delay so it doesn't feel intrusive
+      e.preventDefault();
+      setInstallEvent(e);
       setTimeout(() => setShowBanner(true), 3000);
     };
 
     window.addEventListener("beforeinstallprompt", handler);
 
-    // Detect when the user installs via any method (banner or browser UI)
     window.addEventListener("appinstalled", () => {
       setShowBanner(false);
       setInstalled(true);
@@ -789,7 +835,12 @@ export default function App() {
 
       {/* ── PWA install banner ── */}
       {showBanner && !installed && (
-        <InstallBanner onInstall={handleInstall} onDismiss={() => setShowBanner(false)} />
+        isIOS
+          ? <IOSInstallBanner onDismiss={() => {
+              sessionStorage.setItem("ios_install_dismissed", "1");
+              setShowBanner(false);
+            }} />
+          : <InstallBanner onInstall={handleInstall} onDismiss={() => setShowBanner(false)} />
       )}
     </>
   );
