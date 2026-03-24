@@ -463,9 +463,29 @@ export default function App() {
 
   // Register service worker for PWA
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js")
+      .then(reg => {
+        // When a new SW version is waiting, activate it immediately
+        reg.addEventListener("updatefound", () => {
+          const next = reg.installing;
+          if (!next) return;
+          next.addEventListener("statechange", () => {
+            if (next.state === "installed" && navigator.serviceWorker.controller) {
+              next.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
+        });
+      })
+      .catch(() => {
+        // SW unavailable (HTTP, blocked, etc.) — app works fine without it
+      });
+
+    // Reload once when a new SW takes control so we get fresh JS/CSS
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!refreshing) { refreshing = true; window.location.reload(); }
+    });
   }, []);
 
   // Jump to the first card starting with a given letter
