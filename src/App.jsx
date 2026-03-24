@@ -397,15 +397,93 @@ function KeywordCard({ name, data, index, onClick }) {
   );
 }
 
+// ─── Install banner ──────────────────────────────────────────────────────────
+function InstallBanner({ onInstall, onDismiss }) {
+  const [visible, setVisible] = useState(false);
+
+  // Slide in after mount
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
+
+  function dismiss() {
+    setVisible(false);
+    setTimeout(onDismiss, 300);
+  }
+
+  return (
+    <div style={{
+      position: "fixed", bottom: "env(safe-area-inset-bottom, 0px)",
+      left: 0, right: 0, zIndex: 200,
+      display: "flex", justifyContent: "center",
+      padding: "0 12px 12px",
+      pointerEvents: "none",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 480,
+        background: GRV.bg1,
+        border: `1px solid ${GRV.yellow}`,
+        borderRadius: 12,
+        padding: "14px 16px",
+        display: "flex", alignItems: "center", gap: 12,
+        boxShadow: `0 4px 24px rgba(0,0,0,0.5)`,
+        transform: visible ? "translateY(0)" : "translateY(120%)",
+        transition: "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
+        pointerEvents: "all",
+      }}>
+        {/* Icon */}
+        <div style={{ fontSize: 28, flexShrink: 0, lineHeight: 1 }}>🃏</div>
+
+        {/* Text */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, marginBottom: 2 }}>
+            add to home screen
+          </div>
+          <div style={{ fontSize: 11, color: GRV.fg4, fontFamily: SANS, lineHeight: 1.4 }}>
+            install MTG Keywords for quick offline access
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+          <button
+            onClick={onInstall}
+            style={{
+              background: GRV.yellow, border: "none", borderRadius: 6,
+              color: GRV.bg_h, fontFamily: MONO, fontSize: 12, fontWeight: 700,
+              padding: "7px 14px", cursor: "pointer", whiteSpace: "nowrap",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            install
+          </button>
+          <button
+            onClick={dismiss}
+            style={{
+              background: "none", border: `1px solid ${GRV.bg3}`, borderRadius: 6,
+              color: GRV.fg4, fontFamily: MONO, fontSize: 11,
+              padding: "5px 14px", cursor: "pointer", whiteSpace: "nowrap",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            not now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
 
 export default function App() {
-  const [query,    setQuery]    = useState("");
-  const [filter,   setFilter]   = useState("all");
-  const [selected, setSelected] = useState(null);
+  const [query,        setQuery]       = useState("");
+  const [filter,       setFilter]      = useState("all");
+  const [selected,     setSelected]    = useState(null);
+  const [installEvent, setInstallEvent] = useState(null);  // deferred beforeinstallprompt
+  const [showBanner,   setShowBanner]  = useState(false);
+  const [installed,    setInstalled]   = useState(false);
   const inputRef   = useRef(null);
-  const headerRef   = useRef(null);
+  const headerRef  = useRef(null);
   const [headerHeight, setHeaderHeight] = useState(0);
 
   const allKeywords = Object.entries(MTG_KEYWORDS);
@@ -487,6 +565,41 @@ export default function App() {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
   }, []);
+
+  // Capture the browser's beforeinstallprompt event and show our custom banner
+  useEffect(() => {
+    // Don't show if already installed (standalone mode)
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setInstalled(true);
+      return;
+    }
+
+    const handler = e => {
+      e.preventDefault();          // suppress the mini browser prompt
+      setInstallEvent(e);          // stash it so we can trigger it later
+      // Show our banner after a 3-second delay so it doesn't feel intrusive
+      setTimeout(() => setShowBanner(true), 3000);
+    };
+
+    window.addEventListener("beforeinstallprompt", handler);
+
+    // Detect when the user installs via any method (banner or browser UI)
+    window.addEventListener("appinstalled", () => {
+      setShowBanner(false);
+      setInstalled(true);
+    });
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  async function handleInstall() {
+    if (!installEvent) return;
+    installEvent.prompt();
+    const { outcome } = await installEvent.userChoice;
+    if (outcome === "accepted") setInstalled(true);
+    setShowBanner(false);
+    setInstallEvent(null);
+  }
 
   // Jump to the first card starting with a given letter
   function handleAZJump(letter) {
@@ -673,6 +786,11 @@ export default function App() {
 
       {/* ── Bottom-sheet modal ── */}
       {selected && <Modal keyword={selected.name} data={selected.data} onClose={closeModal} />}
+
+      {/* ── PWA install banner ── */}
+      {showBanner && !installed && (
+        <InstallBanner onInstall={handleInstall} onDismiss={() => setShowBanner(false)} />
+      )}
     </>
   );
 }
