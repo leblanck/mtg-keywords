@@ -26,7 +26,17 @@ cd mtg-keywords
 npm install
 ```
 
-### 2. Drop in the files
+### 2. Add the mobile viewport meta tag
+
+Make sure `index.html` has this in `<head>` — Vite includes it by default, but double-check:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+```
+
+`viewport-fit=cover` fills the safe area on notched iPhones correctly.
+
+### 3. Drop in the files
 
 Copy `mtgKeywords.js` into `src/` and replace the contents of `src/App.jsx`
 with `mtg_keywords_app.jsx`.
