@@ -72,15 +72,28 @@ async function fetchSampleCards(keyword, count = 4) {
   return cards;
 }
 
-// ─── Bottom-sheet Modal (mobile-first) ───────────────────────────────────────
+// ─── Small badge helper ───────────────────────────────────────────────────────
+function Badge({ color, border, children }) {
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, background: GRV.bg1, color, border: `1px solid ${border}`, borderRadius: 3, padding: "2px 6px", letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: MONO, whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
+// ─── Bottom-sheet Modal with swipe-to-dismiss ─────────────────────────────────
 function Modal({ keyword, data, onClose }) {
   const [cards,     setCards]     = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
   const [selected,  setSelected]  = useState(null);
   const [fromCache, setFromCache] = useState(false);
-  const [visible,   setVisible]   = useState(false);   // drives slide-in animation
-  const sheetRef = useRef(null);
+  const [visible,   setVisible]   = useState(false);
+  const [dragY,     setDragY]     = useState(0);      // live drag offset in px
+
+  const sheetRef    = useRef(null);
+  const dragStart   = useRef(null);   // { y, scrollTop } at touch start
+  const isDragging  = useRef(false);
 
   const style       = getStyle(data.category);
   const isEvergreen = EVERGREEN.has(keyword);
@@ -89,7 +102,7 @@ function Modal({ keyword, data, onClose }) {
   // Animate in
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
-  // Lock body scroll while open
+  // Lock body scroll
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -115,42 +128,79 @@ function Modal({ keyword, data, onClose }) {
 
   function handleClose() {
     setVisible(false);
+    setDragY(0);
     setTimeout(onClose, 280);
   }
+
+  // ── Swipe-to-dismiss touch handlers ──
+  function onTouchStart(e) {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    // Only initiate drag when sheet is scrolled to top
+    if (sheet.scrollTop > 0) return;
+    dragStart.current = { y: e.touches[0].clientY };
+    isDragging.current = false;
+  }
+
+  function onTouchMove(e) {
+    if (!dragStart.current) return;
+    const dy = e.touches[0].clientY - dragStart.current.y;
+    if (dy < 0) return;                     // don't drag upward
+    isDragging.current = true;
+    setDragY(dy);
+  }
+
+  function onTouchEnd() {
+    if (!dragStart.current) return;
+    dragStart.current = null;
+    if (dragY > 100) {
+      handleClose();                         // dismiss if dragged far enough
+    } else {
+      setDragY(0);                           // snap back
+    }
+    isDragging.current = false;
+  }
+
+  const sheetTransform = visible
+    ? `translateY(${dragY}px)`
+    : "translateY(100%)";
+
+  const sheetTransition = isDragging.current
+    ? "none"                                 // no transition while finger is down
+    : "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)";
 
   return (
     <div
       onClick={handleClose}
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
-        background: visible ? "rgba(13,10,8,0.75)" : "rgba(13,10,8,0)",
-        transition: "background 0.28s ease",
-        display: "flex", alignItems: "flex-end",
-          justifyContent: "center",    // center horizontally on wide screens
+        background: visible ? `rgba(13,10,8,${Math.max(0, 0.75 - dragY / 400)})` : "rgba(13,10,8,0)",
+        transition: isDragging.current ? "none" : "background 0.28s ease",
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
       }}
     >
-      {/* Sheet */}
       <div
         ref={sheetRef}
         onClick={e => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
         style={{
-          width: "100%",
-          maxWidth: 640,           // caps sheet width on desktop
-          maxHeight: "92dvh",
+          width: "100%", maxWidth: 640, maxHeight: "92dvh",
           background: GRV.bg,
           borderRadius: "16px 16px 0 0",
           border: `1px solid ${style.border}`,
           borderBottom: "none",
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
-          transform: visible ? "translateY(0)" : "translateY(100%)",
-          transition: "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
-          // safe area padding for phones with home bar
+          transform: sheetTransform,
+          transition: sheetTransition,
           paddingBottom: "env(safe-area-inset-bottom, 16px)",
+          willChange: "transform",
         }}
       >
         {/* Drag handle */}
-        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px", cursor: "grab" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: GRV.bg3 }} />
         </div>
 
@@ -171,12 +221,9 @@ function Modal({ keyword, data, onClose }) {
               {data.category}
             </span>
           </div>
-          {/* Large tap target close button */}
-          <button
-            onClick={handleClose}
-            aria-label="Close"
-            style={{ minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", background: GRV.bg1, border: `1px solid ${GRV.bg2}`, borderRadius: 8, cursor: "pointer", color: GRV.fg4, fontSize: 18, flexShrink: 0 }}
-          >✕</button>
+          <button onClick={handleClose} aria-label="Close" style={{ minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", background: GRV.bg1, border: `1px solid ${GRV.bg2}`, borderRadius: 8, cursor: "pointer", color: GRV.fg4, fontSize: 18, flexShrink: 0 }}>
+            ✕
+          </button>
         </div>
 
         {/* Description */}
@@ -198,7 +245,6 @@ function Modal({ keyword, data, onClose }) {
             -- sample cards via scryfall --
           </div>
 
-          {/* Skeletons */}
           {loading && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, maxWidth: 720, margin: "0 auto" }}>
               {[0,1,2,3].map(i => (
@@ -207,7 +253,6 @@ function Modal({ keyword, data, onClose }) {
             </div>
           )}
 
-          {/* Error */}
           {!loading && error && (
             <div style={{ background: GRV.bg1, border: `1px solid ${GRV.red}`, borderRadius: 8, padding: "12px 14px" }}>
               <span style={{ fontSize: 12, color: GRV.red_b, fontFamily: MONO }}>
@@ -216,14 +261,12 @@ function Modal({ keyword, data, onClose }) {
             </div>
           )}
 
-          {/* Empty */}
           {!loading && !error && cards.length === 0 && (
             <div style={{ background: GRV.bg1, border: `1px solid ${GRV.bg3}`, borderRadius: 8, padding: "12px 14px" }}>
               <span style={{ fontSize: 12, color: GRV.fg4, fontFamily: MONO }}>no card images found for this keyword</span>
             </div>
           )}
 
-          {/* Cards — 2-col on mobile, 4-col capped at 160px on desktop */}
           {!loading && cards.length > 0 && (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, maxWidth: 720, margin: "0 auto" }}>
@@ -231,42 +274,19 @@ function Modal({ keyword, data, onClose }) {
                   <div
                     key={card.id}
                     onClick={() => setSelected(selected === i ? null : i)}
-                    style={{
-                      borderRadius: 10, overflow: "hidden", cursor: "pointer",
-                      border: `2px solid ${selected === i ? style.accentLine : "transparent"}`,
-                      transition: "border-color 0.15s",
-                      background: GRV.bg1,
-                      // min tap target height handled by the card image itself
-                    }}
+                    style={{ borderRadius: 10, overflow: "hidden", cursor: "pointer", border: `2px solid ${selected === i ? style.accentLine : "transparent"}`, transition: "border-color 0.15s", background: GRV.bg1 }}
                   >
                     <img src={card.image} alt={card.name} style={{ width: "100%", display: "block", borderRadius: 8 }} loading="lazy" />
                   </div>
                 ))}
               </div>
 
-              {/* Selected card detail */}
               {selected !== null && cards[selected] && (
                 <div style={{ marginTop: 12, background: GRV.bg1, border: `1px solid ${GRV.bg2}`, borderRadius: 8, padding: "14px" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, marginBottom: 4 }}>
-                    {cards[selected].name}
-                  </div>
-                  {cards[selected].type && (
-                    <div style={{ fontSize: 13, color: GRV.fg4, fontFamily: SANS, marginBottom: 4 }}>
-                      {cards[selected].type}
-                    </div>
-                  )}
-                  {cards[selected].artist && (
-                    <div style={{ fontSize: 11, color: GRV.bg4, fontFamily: MONO, marginBottom: 12 }}>
-                      art by {cards[selected].artist}
-                    </div>
-                  )}
-                  {/* Full-width tappable link */}
-                  <a
-                    href={cards[selected].scryfall}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44, fontSize: 13, color: style.badgeText, fontFamily: MONO, textDecoration: "none", border: `1px solid ${style.badge}`, borderRadius: 6, padding: "0 16px" }}
-                  >
+                  <div style={{ fontSize: 15, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, marginBottom: 4 }}>{cards[selected].name}</div>
+                  {cards[selected].type   && <div style={{ fontSize: 13, color: GRV.fg4, fontFamily: SANS, marginBottom: 4 }}>{cards[selected].type}</div>}
+                  {cards[selected].artist && <div style={{ fontSize: 11, color: GRV.bg4, fontFamily: MONO, marginBottom: 12 }}>art by {cards[selected].artist}</div>}
+                  <a href={cards[selected].scryfall} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44, fontSize: 13, color: style.badgeText, fontFamily: MONO, textDecoration: "none", border: `1px solid ${style.badge}`, borderRadius: 6, padding: "0 16px" }}>
                     view on scryfall ↗
                   </a>
                 </div>
@@ -284,12 +304,45 @@ function Modal({ keyword, data, onClose }) {
   );
 }
 
-// ─── Small badge helper ───────────────────────────────────────────────────────
-function Badge({ color, border, children }) {
+// ─── A-Z Index bar ────────────────────────────────────────────────────────────
+function AZIndex({ letters, activeLetters, onJump }) {
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, background: GRV.bg1, color, border: `1px solid ${border}`, borderRadius: 3, padding: "2px 6px", letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: MONO, whiteSpace: "nowrap" }}>
-      {children}
-    </span>
+    <div style={{
+      position: "fixed",
+      right: 0, top: "50%",
+      transform: "translateY(-50%)",
+      zIndex: 50,
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "6px 2px",
+      background: GRV.bg1 + "cc",
+      borderRadius: "8px 0 0 8px",
+      border: `1px solid ${GRV.bg2}`,
+      borderRight: "none",
+      gap: 1,
+      // Only show on reasonably wide screens to avoid overlapping cards
+      // We handle hiding in CSS via a class
+    }}>
+      {letters.map(letter => (
+        <button
+          key={letter}
+          onClick={() => onJump(letter)}
+          aria-label={`Jump to ${letter}`}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontFamily: MONO, fontSize: 10, fontWeight: 700,
+            color: activeLetters.has(letter) ? GRV.yellow_b : GRV.bg3,
+            padding: "3px 6px",
+            lineHeight: 1,
+            WebkitTapHighlightColor: "transparent",
+            opacity: activeLetters.has(letter) ? 1 : 0.4,
+            minWidth: 22, minHeight: 22,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {letter}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -301,50 +354,30 @@ function KeywordCard({ name, data, index, onClick }) {
 
   return (
     <div
+      id={`kw-${name}`}
       onClick={onClick}
-      // min-height 44px guaranteed by padding; full-width tap area
-      style={{
-        background: style.bg,
-        border: `1px solid ${style.border}`,
-        borderRadius: 8,
-        padding: "14px 14px 12px",
-        display: "flex", flexDirection: "column", gap: 9,
-        animation: "fadeUp 0.25s ease both",
-        animationDelay: `${Math.min(index * 0.02, 0.3)}s`,
-        position: "relative", overflow: "hidden",
-        cursor: "pointer",
-        // active state feedback for touch
-        WebkitTapHighlightColor: "transparent",
-      }}
+      style={{ background: style.bg, border: `1px solid ${style.border}`, borderRadius: 8, padding: "14px 14px 12px", display: "flex", flexDirection: "column", gap: 9, animation: "fadeUp 0.25s ease both", animationDelay: `${Math.min(index * 0.02, 0.3)}s`, position: "relative", overflow: "hidden", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = style.accentLine; e.currentTarget.style.background = GRV.bg1; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = style.border;     e.currentTarget.style.background = style.bg; }}
     >
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: style.accentLine }} />
 
-      {/* Name row */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginTop: 2 }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, lineHeight: 1.3, wordBreak: "break-word" }}>
-          {name}
-        </h3>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, lineHeight: 1.3, wordBreak: "break-word" }}>{name}</h3>
         <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {isEvergreen && <Badge color={GRV.green_b}  border={GRV.green}>evergreen</Badge>}
           {isAlpha     && <Badge color={GRV.orange_b} border={GRV.orange}>OG</Badge>}
         </div>
       </div>
 
-      {/* Category badge */}
       <div>
         <span style={{ fontSize: 10, fontWeight: 700, background: style.badgeBg, color: style.badgeText, border: `1px solid ${style.badge}`, borderRadius: 3, padding: "2px 8px", letterSpacing: "0.07em", textTransform: "uppercase", fontFamily: MONO }}>
           {data.category}
         </span>
       </div>
 
-      {/* Description */}
-      <p style={{ margin: 0, fontSize: 13.5, color: GRV.fg2, lineHeight: 1.65, fontFamily: SANS }}>
-        {data.description}
-      </p>
+      <p style={{ margin: 0, fontSize: 13.5, color: GRV.fg2, lineHeight: 1.65, fontFamily: SANS }}>{data.description}</p>
 
-      {/* Footer row */}
       <div style={{ paddingTop: 8, borderTop: `1px solid ${GRV.bg2}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: GRV.bg4, fontFamily: MONO }}>set:</span>
@@ -357,6 +390,8 @@ function KeywordCard({ name, data, index, onClick }) {
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
+const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
+
 export default function App() {
   const [query,    setQuery]    = useState("");
   const [filter,   setFilter]   = useState("all");
@@ -374,11 +409,21 @@ export default function App() {
       || data.first_set.toLowerCase().includes(q);
     const matchesFilter =
       filter === "all"
-      || (filter === "ability"  && data.category === "Keyword ability")
-      || (filter === "action"   && data.category === "Keyword action")
+      || (filter === "ability"   && data.category === "Keyword ability")
+      || (filter === "action"    && data.category === "Keyword action")
       || (filter === "evergreen" && EVERGREEN.has(name));
     return matchesSearch && matchesFilter;
   }), [query, filter]);
+
+  // Which letters are represented in the current filtered set
+  const activeLetters = useMemo(() => {
+    const s = new Set();
+    filtered.forEach(([name]) => {
+      const ch = name[0].toUpperCase();
+      s.add(/[A-Z]/.test(ch) ? ch : "#");
+    });
+    return s;
+  }, [filtered]);
 
   const FILTERS = [
     { id: "all",       label: "All" },
@@ -389,12 +434,34 @@ export default function App() {
 
   const closeModal = useCallback(() => setSelected(null), []);
 
-  // Dismiss keyboard on scroll (common mobile UX pattern)
+  // Dismiss keyboard on scroll
   useEffect(() => {
     const onScroll = () => { if (inputRef.current) inputRef.current.blur(); };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Register service worker for PWA
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+
+  // Jump to the first card starting with a given letter
+  function handleAZJump(letter) {
+    const target = filtered.find(([name]) => {
+      const ch = name[0].toUpperCase();
+      return letter === "#" ? !/[A-Z]/.test(ch) : ch === letter;
+    });
+    if (!target) return;
+    const el = document.getElementById(`kw-${target[0]}`);
+    if (el) {
+      // Offset for the sticky header (~110px)
+      const top = el.getBoundingClientRect().top + window.scrollY - 116;
+      window.scrollTo({ top, behavior: "smooth" });
+    }
+  }
 
   return (
     <>
@@ -411,20 +478,13 @@ export default function App() {
         }
 
         *, *::before, *::after { box-sizing: border-box; }
-
-        /* Prevent font size bump on orientation change in iOS */
         html { -webkit-text-size-adjust: 100%; }
-
         body { margin: 0; }
-
-        /* Smooth momentum scrolling on iOS */
-        .scroll-area { -webkit-overflow-scrolling: touch; }
 
         input[type=text] {
           -webkit-appearance: none;
           appearance: none;
           transition: border-color 0.15s;
-          /* Prevent iOS zoom on focus (font-size must be >= 16px) */
           font-size: 16px !important;
         }
         input[type=text]:focus {
@@ -433,7 +493,6 @@ export default function App() {
           box-shadow: 0 0 0 2px ${GRV.yellow}30;
         }
 
-        /* Filter buttons — large tap targets */
         .filter-btn {
           min-height: 40px;
           display: flex;
@@ -450,7 +509,6 @@ export default function App() {
           white-space: nowrap;
         }
 
-        /* Hide scrollbar on filter row but keep it scrollable */
         .filter-row {
           display: flex;
           gap: 8px;
@@ -461,6 +519,13 @@ export default function App() {
         }
         .filter-row::-webkit-scrollbar { display: none; }
 
+        /* Hide A-Z bar on very narrow screens to avoid overlap */
+        .az-bar { display: flex; }
+        @media (max-width: 359px) { .az-bar { display: none; } }
+
+        /* On desktop give the grid right-padding so A-Z bar doesn't overlap */
+        @media (min-width: 480px) { .card-grid-wrap { padding-right: 28px; } }
+
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: ${GRV.bg_h}; }
         ::-webkit-scrollbar-thumb { background: ${GRV.bg3}; border-radius: 2px; }
@@ -469,15 +534,7 @@ export default function App() {
       <div style={{ minHeight: "100dvh", background: GRV.bg_h, fontFamily: SANS }}>
 
         {/* ── Sticky search + filter bar ── */}
-        <div style={{
-          position: "sticky", top: 0, zIndex: 100,
-          background: GRV.bg_h,
-          borderBottom: `1px solid ${GRV.bg1}`,
-          padding: "10px 12px 10px",
-          // Safe area top (notch phones)
-          paddingTop: "max(10px, env(safe-area-inset-top))",
-        }}>
-          {/* Search input */}
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: GRV.bg_h, borderBottom: `1px solid ${GRV.bg1}`, padding: "10px 12px 10px", paddingTop: "max(10px, env(safe-area-inset-top))" }}>
           <div style={{ position: "relative", marginBottom: 10 }}>
             <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="6.5" cy="6.5" r="5" stroke={GRV.bg4} strokeWidth="1.5"/>
@@ -492,43 +549,19 @@ export default function App() {
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck="false"
-              style={{
-                width: "100%",
-                height: 46,
-                paddingLeft: 38, paddingRight: query ? 40 : 14,
-                background: GRV.bg,
-                border: `1px solid ${GRV.bg2}`,
-                borderRadius: 8,
-                color: GRV.fg,
-                fontFamily: MONO,
-              }}
+              style={{ width: "100%", height: 46, paddingLeft: 38, paddingRight: query ? 40 : 14, background: GRV.bg, border: `1px solid ${GRV.bg2}`, borderRadius: 8, color: GRV.fg, fontFamily: MONO }}
             />
             {query && (
-              <button
-                onClick={() => { setQuery(""); inputRef.current?.focus(); }}
-                aria-label="Clear search"
-                style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: GRV.bg4, fontSize: 20 }}
-              >×</button>
+              <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} aria-label="Clear search" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: GRV.bg4, fontSize: 20 }}>×</button>
             )}
           </div>
 
-          {/* Filter chips — horizontal scroll */}
           <div className="filter-row">
             {FILTERS.map(f => (
-              <button
-                key={f.id}
-                className="filter-btn"
-                onClick={() => setFilter(f.id)}
-                style={{
-                  background:   filter === f.id ? GRV.bg2        : "transparent",
-                  borderColor:  filter === f.id ? GRV.yellow      : GRV.bg2,
-                  color:        filter === f.id ? GRV.yellow_b    : GRV.fg4,
-                }}
-              >
+              <button key={f.id} className="filter-btn" onClick={() => setFilter(f.id)} style={{ background: filter === f.id ? GRV.bg2 : "transparent", borderColor: filter === f.id ? GRV.yellow : GRV.bg2, color: filter === f.id ? GRV.yellow_b : GRV.fg4 }}>
                 {f.label}
               </button>
             ))}
-            {/* Result count pinned to right of scroll area */}
             <span style={{ marginLeft: "auto", fontSize: 12, color: GRV.bg3, fontFamily: MONO, alignSelf: "center", paddingRight: 2, whiteSpace: "nowrap", flexShrink: 0 }}>
               [{filtered.length}]
             </span>
@@ -537,18 +570,10 @@ export default function App() {
 
         {/* ── Page header ── */}
         <div style={{ padding: "24px 16px 16px", textAlign: "center" }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.28em", color: GRV.bg4, textTransform: "uppercase", fontFamily: MONO, marginBottom: 8 }}>
-            -- reference grimoire --
-          </div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, letterSpacing: "0.03em", lineHeight: 1.2 }}>
-            Magic: The Gathering
-          </h1>
-          <h2 style={{ margin: "4px 0 14px", fontSize: 14, fontWeight: 400, color: GRV.orange_b, fontFamily: MONO, letterSpacing: "0.1em" }}>
-            Keyword Encyclopedia
-          </h2>
+          <div style={{ fontSize: 10, letterSpacing: "0.28em", color: GRV.bg4, textTransform: "uppercase", fontFamily: MONO, marginBottom: 8 }}>-- reference grimoire --</div>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: GRV.yellow_b, fontFamily: MONO, letterSpacing: "0.03em", lineHeight: 1.2 }}>Magic: The Gathering</h1>
+          <h2 style={{ margin: "4px 0 14px", fontSize: 14, fontWeight: 400, color: GRV.orange_b, fontFamily: MONO, letterSpacing: "0.1em" }}>Keyword Encyclopedia</h2>
           <div style={{ width: 80, height: 1, background: GRV.bg3, margin: "0 auto 10px" }} />
-
-          {/* Legend inline with count */}
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
             {[{ color: GRV.blue_b, label: "Ability" }, { color: GRV.aqua_b, label: "Action" }].map(({ color, label }) => (
               <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -561,20 +586,16 @@ export default function App() {
         </div>
 
         {/* ── Card grid ── */}
-        <div style={{ padding: "0 12px 32px" }}>
+        <div className="card-grid-wrap" style={{ padding: "0 12px 32px" }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 0", color: GRV.bg3 }}>
               <div style={{ fontFamily: MONO, fontSize: 14, marginBottom: 6 }}>-- no results --</div>
               <div style={{ fontSize: 12, color: GRV.bg2 }}>try a different search or filter</div>
             </div>
           ) : (
-            // Single column on narrow screens, 2-col on wider phones/tablets
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
               {filtered.map(([name, data], i) => (
-                <KeywordCard
-                  key={name} name={name} data={data} index={i}
-                  onClick={() => setSelected({ name, data })}
-                />
+                <KeywordCard key={name} name={name} data={data} index={i} onClick={() => setSelected({ name, data })} />
               ))}
             </div>
           )}
@@ -585,39 +606,32 @@ export default function App() {
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
             <p style={{ margin: 0, fontSize: 11, color: GRV.bg4, fontFamily: MONO, lineHeight: 1.8 }}>
               Card data and images retrieved from the{" "}
-              <a href="https://scryfall.com/docs/api" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>
-                Scryfall API
-              </a>
+              <a href="https://scryfall.com/docs/api" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>Scryfall API</a>
               {" "}per Scryfall's{" "}
-              <a href="https://scryfall.com/docs/api" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>
-                non-commercial use policy
-              </a>.
+              <a href="https://scryfall.com/docs/api" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>non-commercial use policy</a>.
             </p>
             <p style={{ margin: 0, fontSize: 11, color: GRV.bg4, fontFamily: MONO, lineHeight: 1.8 }}>
               Magic: The Gathering and all card images are property of{" "}
-              <a href="https://company.wizards.com" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>
-                Wizards of the Coast
-              </a>
+              <a href="https://company.wizards.com" target="_blank" rel="noopener noreferrer" style={{ color: GRV.aqua_b, textDecoration: "none", borderBottom: `1px solid ${GRV.aqua}` }}>Wizards of the Coast</a>
               . Unofficial fan tool — not affiliated with or endorsed by Wizards of the Coast.
             </p>
           </div>
-
           <div style={{ width: 80, height: 1, background: GRV.bg1, margin: "0 auto 16px" }} />
-
           <p style={{ margin: 0, fontSize: 11, color: GRV.bg3, fontFamily: MONO, lineHeight: 1.8 }}>
             © {new Date().getFullYear()} Made with ♥ by{" "}
-            <a href="https://leblanc.sh" target="_blank" rel="noopener noreferrer" style={{ color: GRV.yellow_b, textDecoration: "none", borderBottom: `1px solid ${GRV.yellow}` }}>
-              LeBlanc Engineering
-            </a>
+            <a href="https://leblanc.sh" target="_blank" rel="noopener noreferrer" style={{ color: GRV.yellow_b, textDecoration: "none", borderBottom: `1px solid ${GRV.yellow}` }}>LeBlanc Engineering</a>
             {" "}in Maine.
           </p>
-
-          {/* Bottom safe area spacer */}
           <div style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
         </div>
       </div>
 
-      {/* Bottom-sheet modal */}
+      {/* ── A-Z index bar ── */}
+      <div className="az-bar">
+        <AZIndex letters={ALL_LETTERS} activeLetters={activeLetters} onJump={handleAZJump} />
+      </div>
+
+      {/* ── Bottom-sheet modal ── */}
       {selected && <Modal keyword={selected.name} data={selected.data} onClose={closeModal} />}
     </>
   );
