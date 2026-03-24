@@ -305,43 +305,51 @@ function Modal({ keyword, data, onClose }) {
 }
 
 // ─── A-Z Index bar ────────────────────────────────────────────────────────────
-function AZIndex({ letters, activeLetters, onJump }) {
+function AZIndex({ letters, activeLetters, onJump, topOffset = 0 }) {
+  // Outer div spans the viewport below the sticky header and centers its child
   return (
     <div style={{
       position: "fixed",
-      right: 0, top: "50%",
-      transform: "translateY(-50%)",
+      right: 0,
+      top: topOffset,
+      height: `calc(100dvh - ${topOffset}px)`,
       zIndex: 50,
-      display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "6px 2px",
-      background: GRV.bg1 + "cc",
-      borderRadius: "8px 0 0 8px",
-      border: `1px solid ${GRV.bg2}`,
-      borderRight: "none",
-      gap: 1,
-      // Only show on reasonably wide screens to avoid overlapping cards
-      // We handle hiding in CSS via a class
+      display: "flex", flexDirection: "column",
+      alignItems: "flex-end", justifyContent: "center",
+      pointerEvents: "none",   // transparent to taps except the pill itself
     }}>
-      {letters.map(letter => (
-        <button
-          key={letter}
-          onClick={() => onJump(letter)}
-          aria-label={`Jump to ${letter}`}
-          style={{
-            background: "none", border: "none", cursor: "pointer",
-            fontFamily: MONO, fontSize: 10, fontWeight: 700,
-            color: activeLetters.has(letter) ? GRV.yellow_b : GRV.bg3,
-            padding: "3px 6px",
-            lineHeight: 1,
-            WebkitTapHighlightColor: "transparent",
-            opacity: activeLetters.has(letter) ? 1 : 0.4,
-            minWidth: 22, minHeight: 22,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          {letter}
-        </button>
-      ))}
+      {/* The visible pill */}
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        padding: "6px 2px",
+        background: GRV.bg1 + "cc",
+        borderRadius: "8px 0 0 8px",
+        border: `1px solid ${GRV.bg2}`,
+        borderRight: "none",
+        gap: 1,
+        pointerEvents: "all",
+      }}>
+        {letters.map(letter => (
+          <button
+            key={letter}
+            onClick={() => onJump(letter)}
+            aria-label={`Jump to ${letter}`}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              fontFamily: MONO, fontSize: 10, fontWeight: 700,
+              color: activeLetters.has(letter) ? GRV.yellow_b : GRV.bg3,
+              padding: "3px 6px",
+              lineHeight: 1,
+              WebkitTapHighlightColor: "transparent",
+              opacity: activeLetters.has(letter) ? 1 : 0.4,
+              minWidth: 22, minHeight: 22,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            {letter}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -396,7 +404,9 @@ export default function App() {
   const [query,    setQuery]    = useState("");
   const [filter,   setFilter]   = useState("all");
   const [selected, setSelected] = useState(null);
-  const inputRef = useRef(null);
+  const inputRef   = useRef(null);
+  const headerRef   = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   const allKeywords = Object.entries(MTG_KEYWORDS);
   const totalCount  = allKeywords.length;
@@ -433,6 +443,16 @@ export default function App() {
   ];
 
   const closeModal = useCallback(() => setSelected(null), []);
+
+  // Measure sticky header height so A-Z bar can clear it
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const update = () => setHeaderHeight(headerRef.current.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(headerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Dismiss keyboard on scroll
   useEffect(() => {
@@ -534,7 +554,7 @@ export default function App() {
       <div style={{ minHeight: "100dvh", background: GRV.bg_h, fontFamily: SANS }}>
 
         {/* ── Sticky search + filter bar ── */}
-        <div style={{ position: "sticky", top: 0, zIndex: 100, background: GRV.bg_h, borderBottom: `1px solid ${GRV.bg1}`, padding: "10px 12px 10px", paddingTop: "max(10px, env(safe-area-inset-top))" }}>
+        <div ref={headerRef} style={{ position: "sticky", top: 0, zIndex: 100, background: GRV.bg_h, borderBottom: `1px solid ${GRV.bg1}`, padding: "10px 12px 10px", paddingTop: "max(10px, env(safe-area-inset-top))" }}>
           <div style={{ position: "relative", marginBottom: 10 }}>
             <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="6.5" cy="6.5" r="5" stroke={GRV.bg4} strokeWidth="1.5"/>
@@ -628,7 +648,7 @@ export default function App() {
 
       {/* ── A-Z index bar ── */}
       <div className="az-bar">
-        <AZIndex letters={ALL_LETTERS} activeLetters={activeLetters} onJump={handleAZJump} />
+        <AZIndex letters={ALL_LETTERS} activeLetters={activeLetters} onJump={handleAZJump} topOffset={headerHeight} />
       </div>
 
       {/* ── Bottom-sheet modal ── */}
